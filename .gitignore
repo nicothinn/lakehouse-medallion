@@ -1,0 +1,14 @@
+# python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+# dlt / staging local
+bronze_staging/
+bronze_users/
+# secretos locales
+.env
+.dlt/secrets.toml
+scripts/.dremio_token
+# temporales de debug
+.tmp-*
+*.log

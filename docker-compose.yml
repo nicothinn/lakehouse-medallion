@@ -1,0 +1,179 @@
+# Proyecto 2 Lakehouse — docker-compose.yml entrega
+# MinIO + Nessie/Postgres + Spark + Airflow + Jupyter + Dremio + Trino
+# Uso: docker compose up -d --build | docker compose logs -f | docker compose down
+name: proyecto2-lakehouse
+
+services:
+  minio:
+    image: minio/minio:latest
+    container_name: p2-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: admin123
+      MINIO_REGION: us-east-1
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - p2-minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [lakehouse]
+
+  postgres:
+    image: postgres:16
+    container_name: p2-postgres
+    environment:
+      POSTGRES_USER: nessie
+      POSTGRES_PASSWORD: nessie
+      POSTGRES_DB: nessie
+    volumes:
+      - p2-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nessie -d nessie"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks: [lakehouse]
+
+  nessie:
+    image: ghcr.io/projectnessie/nessie:0.102.0
+    container_name: p2-nessie
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "19120:19120"
+    environment:
+      NESSIE_VERSION_STORE_TYPE: JDBC2
+      NESSIE_VERSION_STORE_PERSIST_JDBC_DATASOURCE: postgresql
+      QUARKUS_DATASOURCE_POSTGRESQL_JDBC_URL: jdbc:postgresql://postgres:5432/nessie
+      QUARKUS_DATASOURCE_POSTGRESQL_USERNAME: nessie
+      QUARKUS_DATASOURCE_POSTGRESQL_PASSWORD: nessie
+      nessie.catalog.default-warehouse: warehouse
+      nessie.catalog.warehouses.warehouse.location: s3://lakehouse/
+      nessie.catalog.service.s3.default-options.endpoint: http://minio:9000/
+      nessie.catalog.service.s3.default-options.access-key: "urn:nessie-secret:quarkus:nessie.catalog.secrets.access-key"
+      nessie.catalog.service.s3.default-options.path-style-access: "true"
+      nessie.catalog.service.s3.default-options.auth-type: STATIC
+      nessie.catalog.secrets.access-key.name: admin
+      nessie.catalog.secrets.access-key.secret: admin123
+      nessie.catalog.service.s3.default-options.region: us-east-1
+      nessie.server.authentication.enabled: "false"
+    networks: [lakehouse]
+
+  spark-master:
+    image: apache/spark:3.5.0  # ponytail: igual que pyspark del driver (3.5.0 vs 3.5.1 rompe serializacion RDD)
+    container_name: p2-spark-master
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+    ports:
+      - "8081:8080"
+      - "7077:7077"
+    environment:
+      SPARK_MODE: master
+    networks: [lakehouse]
+
+  spark-worker:
+    image: apache/spark:3.5.0  # ponytail: igual que pyspark del driver
+    container_name: p2-spark-worker
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077 -c 2 -m 4G
+    depends_on: [spark-master]
+    environment:
+      SPARK_MODE: worker
+    networks: [lakehouse]
+
+  jupyter:
+    build: ./jupyter
+    image: proyecto2-lakehouse-jupyter  # ponytail: airflow reusa esta misma imagen (un build)
+    container_name: p2-jupyter
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./notebooks:/home/jovyan/work
+      - ./scripts:/opt/airflow/scripts
+      - ./scripts:/home/jovyan/scripts
+      - ./data:/home/jovyan/data
+      - ./.dlt:/opt/airflow/.dlt:ro
+      - ./.dlt:/home/jovyan/.dlt:ro
+    environment:
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_USER: admin
+      MINIO_PASSWORD: admin123
+      NESSIE_URI: http://nessie:19120/api/v2
+      S3_BUCKET: lakehouse
+      SPARK_VERSION: "3.5"
+    depends_on:
+      minio:
+        condition: service_healthy
+      nessie:
+        condition: service_started
+    networks: [lakehouse]
+
+  airflow:
+    build: ./jupyter
+    image: proyecto2-lakehouse-jupyter
+    container_name: p2-airflow
+    command: airflow standalone
+    user: "0:0"  # ponytail: la imagen corre como jovyan; airflow necesita escribir su sqlite
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/api/v1/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    ports:
+      - "8083:8080"  # ponytail: :8080 lo ocupa AgentService del host
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./scripts:/opt/airflow/scripts
+      - ./data:/opt/airflow/data
+      - ./.dlt:/opt/airflow/.dlt:ro
+      - p2-airflow-data:/opt/airflow
+    environment:
+      AIRFLOW__CORE__EXECUTOR: SequentialExecutor  # ponytail: DAG lineal, basta; LocalExecutor exige Postgres
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_USER: admin
+      MINIO_PASSWORD: admin123
+      NESSIE_URI: http://nessie:19120/api/v2
+      S3_BUCKET: lakehouse
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks: [lakehouse]
+
+  dremio:
+    image: dremio/dremio-oss:latest
+    container_name: p2-dremio
+    ports:
+      - "9047:9047"
+      - "31010:31010"
+    volumes:
+      - p2-dremio-data:/opt/dremio/data
+    networks: [lakehouse]
+
+  trino:
+    image: trinodb/trino:446
+    container_name: p2-trino
+    ports:
+      - "8082:8080"
+    volumes:
+      - ./trino-catalog:/etc/trino/catalog:ro
+    networks: [lakehouse]
+
+volumes:
+  p2-minio-data:
+  p2-pgdata:
+  p2-airflow-data:
+  p2-dremio-data:
+
+networks:
+  lakehouse:
+    driver: bridge

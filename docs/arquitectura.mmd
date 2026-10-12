@@ -1,0 +1,11 @@
+```mermaid
+flowchart LR
+  CH[(ClickHouse S3\nstackoverflow)] -->|manual: post 2020/2021\nmanual: users 2020| B[MinIO Bronze\nParquet overwrite]
+  CH -->|pipeline T1 DLT:\nusers 2021| B
+  B -->|script manual| S1[(Silver post_hist\nIceberg MERGE)]
+  B -->|pipeline T2 Spark| S2[(Silver users_hist\nIceberg MERGE)]
+  S1 & S2 -->|pipeline T3 Spark| G[(Gold cant_post_x_user_hist\n+ top_tags\nIceberg MERGE)]
+  S1 & S2 --> Trino
+  G --> Dremio
+  AF[Airflow DAG\n1 Play: B->S2->G] -.-> B
+```
