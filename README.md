@@ -24,6 +24,18 @@
   ![Status](https://img.shields.io/badge/DAG_3_tareas-SUCCESS-2ea043)
 </div>
 
+### Autores
+
+Proyecto 2 — **Frameworks y Herramientas para Big Data (UAO)**.
+
+| Nombre | Código |
+|---|---|
+| Juan Pablo Gómez Veira | 2231715 |
+| Laura Daniela Astudillo | 2236318 |
+| Angela María Ruiz Tovar | 2235110 |
+| María Paula Pinillo | 2236243 |
+| Nicolás Peña Irurita | 2232049 |
+
 <details>
   <summary>Tabla de contenido</summary>
   <ol>
@@ -34,14 +46,11 @@
     <li><a href="#plan">Plan</a></li>
     <li><a href="#sustentación">Sustentación</a></li>
     <li><a href="#solución-de-problemas">Solución de problemas</a></li>
-    <li><a href="#autores">Autores</a></li>
     <li><a href="#agradecimientos">Agradecimientos</a></li>
   </ol>
 </details>
 
 ## Acerca del proyecto
-
-[![Pipeline](docs/arquitectura.png)](docs/arquitectura.mmd)
 
 Lakehouse open source local para el Proyecto 2 del curso **Frameworks y Herramientas para Big Data (UAO)**: ingesta StackOverflow 2020-2021 con arquitectura medallón completa y consultable. Un Play de Airflow corre `users_2021` de punta a punta; el resto va precargado manual.
 
@@ -199,20 +208,6 @@ Preguntas fijas del profe, respuesta en una línea:
 * `MERGE_CARDINALITY_VIOLATION` en `top_tags`: era el split sobre-escapado (`'\\s+'` en SQL-string no partía por espacios y no hacía trim) → fuente con tags duplicados. Fijo con funciones `split`+`trim` y `groupBy` antes del `limit`.
 * `InvalidClassException: RDD` entre driver y clúster: fijar misma versión Spark en compose y driver (aquí 3.5.0 en ambos).
 * Si Trino dice `API version mismatch`: el catálogo debe usar `/api/v1` (ver `trino-catalog/iceberg.properties`).
-
-<p align="right">(<a href="#readme-top">volver arriba</a>)</p>
-
-## Autores
-
-Proyecto 2 — **Frameworks y Herramientas para Big Data (UAO)**.
-
-| Nombre | Código |
-|---|---|
-| Juan Pablo Gómez Veira | 2231715 |
-| Laura Daniela Astudillo | 2236318 |
-| Angela María Ruiz Tovar | 2235110 |
-| María Paula Pinillo | 2236243 |
-| Nicolás Peña Irurita | 2232049 |
 
 <p align="right">(<a href="#readme-top">volver arriba</a>)</p>
 
