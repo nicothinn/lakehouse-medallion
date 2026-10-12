@@ -43,8 +43,6 @@ Proyecto 2 — **Frameworks y Herramientas para Big Data (UAO)**.
     <li><a href="#primeros-pasos">Primeros pasos</a></li>
     <li><a href="#paso-a-paso-desde-cero">Paso a paso desde cero</a></li>
     <li><a href="#uso">Uso</a></li>
-    <li><a href="#plan">Plan</a></li>
-    <li><a href="#sustentación">Sustentación</a></li>
     <li><a href="#solución-de-problemas">Solución de problemas</a></li>
     <li><a href="#agradecimientos">Agradecimientos</a></li>
   </ol>
@@ -171,31 +169,6 @@ Trino `:8082` → `sql/trino_replicate_gold.sql` → `180188,300000`. Dremio `:9
 | Spark UI | :8081 | — |
 | Dremio | :9047 | admin/Admin123! (o primer login en instalación limpia) |
 | Trino | :8082 | — |
-
-<p align="right">(<a href="#readme-top">volver arriba</a>)</p>
-
-## Plan
-
-- [x] Bronze Parquet overwrite (DLT `replace`)
-- [x] Silver Iceberg MERGE + `fecha_cargue`
-- [x] Gold Iceberg MERGE + `fecha_cargue` (2 tablas)
-- [x] Trino replica == Dremio gold
-- [ ] Time-travel / branch Nessie en vivo (milla extra, 5 min)
-- [ ] Capa visual Power BI (corte 3)
-
-<p align="right">(<a href="#readme-top">volver arriba</a>)</p>
-
-## Sustentación
-
-Preguntas fijas del profe, respuesta en una línea:
-
-* ¿Por qué Parquet en Bronze? Columnar + comprimido para el crudo analítico; overwrite reescribe el día.
-* ¿Por qué Iceberg en Silver/Gold y no Parquet? Sin table format no hay tabla SQL/ACID/merge; Iceberg = lista de archivos + metadatos en Nessie.
-* ¿Dónde están los secrets? `.dlt/secrets.toml` (montado en Jupyter/Airflow, nunca en código).
-* ¿ML de qué capa, BI de qué capa? ML de Silver, BI de Gold.
-* ¿Re-correr duplica? No: Bronze `replace`/overwrite, Silver/Gold `MERGE` + `fecha_cargue` (verificado 2×).
-* ¿Los jobs corren en el clúster? Sí: driver en Airflow, executors en `spark-master:7077` (Spark UI `:8081`); `SPARK_MASTER_URL=local` como fallback.
-* ¿Trino y Dremio coinciden? Sí: réplica Silver→Gold en Trino == Gold en Dremio (`180188,300000`).
 
 <p align="right">(<a href="#readme-top">volver arriba</a>)</p>
 
